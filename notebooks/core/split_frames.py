@@ -4,9 +4,9 @@ import os
 import json
 from sklearn.model_selection import train_test_split, KFold
 
-#Divide the frames into n-splits
+# Divide the frames into n-splits
 def cross_validation_split(frames, frames_json, patch_dir, n=10):
-    """ n-times divide the frames into training, validation and test.
+    """n-times divide the frames into training, validation and test.
 
     Args:
         frames: list(FrameInfo)
@@ -18,9 +18,9 @@ def cross_validation_split(frames, frames_json, patch_dir, n=10):
     """
     if os.path.isfile(frames_json):
         print("Reading n-splits from file")
-        with open(frames_json, 'r') as file:
+        with open(frames_json, "r") as file:
             fjson = json.load(file)
-            splits = fjson['splits']
+            splits = fjson["splits"]
     else:
         print("Creating and writing n-splits to file")
         frames_list = list(range(len(frames)))
@@ -30,17 +30,16 @@ def cross_validation_split(frames, frames_json, patch_dir, n=10):
         splits = []
         for train_index, test_index in kf.split(frames_list):
             splits.append([train_index.tolist(), test_index.tolist()])
-        frame_split = {
-            'splits': splits
-        }
+        frame_split = {"splits": splits}
         if not os.path.exists(patch_dir):
             os.makedirs(patch_dir)
-        with open(frames_json, 'w') as f:
+        with open(frames_json, "w") as f:
             json.dump(frame_split, f)
 
     return splits
 
-def split_dataset(frames, frames_json, patch_dir, test_size = 0.2, val_size = 0.2):
+
+def split_dataset(frames, frames_json, patch_dir, test_size=0.2, val_size=0.2):
     """Divide the frames into training, validation and test.
 
     Args:
@@ -57,30 +56,34 @@ def split_dataset(frames, frames_json, patch_dir, test_size = 0.2, val_size = 0.
     """
     if os.path.isfile(frames_json):
         print("Reading train-test split from file")
-        with open(frames_json, 'r') as file:
+        with open(frames_json, "r") as file:
             fjson = json.load(file)
-            training_frames = fjson['training_frames']
-            testing_frames = fjson['testing_frames']
-            validation_frames = fjson['validation_frames']
+            training_frames = fjson["training_frames"]
+            testing_frames = fjson["testing_frames"]
+            validation_frames = fjson["validation_frames"]
     else:
         print("Creating and writing train-test split from file")
         frames_list = list(range(len(frames)))
         # Divide into training and test set
-        training_frames, testing_frames = train_test_split(frames_list, test_size=test_size)
+        training_frames, testing_frames = train_test_split(
+            frames_list, test_size=test_size
+        )
 
         # Further divide into training set into training and validataion set
-        training_frames, validation_frames = train_test_split(training_frames, test_size=val_size)
+        training_frames, validation_frames = train_test_split(
+            training_frames, test_size=val_size
+        )
         frame_split = {
-            'training_frames': training_frames,
-            'testing_frames': testing_frames,
-            'validation_frames': validation_frames
+            "training_frames": training_frames,
+            "testing_frames": testing_frames,
+            "validation_frames": validation_frames,
         }
         if not os.path.exists(patch_dir):
             os.makedirs(patch_dir)
-        with open(frames_json, 'w') as f:
+        with open(frames_json, "w") as f:
             json.dump(frame_split, f)
 
-    print('training_frames', training_frames)
-    print('validation_frames', validation_frames)
-    print('testing_frames', testing_frames)
-    return (training_frames,validation_frames, testing_frames )
+    print("training_frames", training_frames)
+    print("validation_frames", validation_frames)
+    print("testing_frames", testing_frames)
+    return (training_frames, validation_frames, testing_frames)

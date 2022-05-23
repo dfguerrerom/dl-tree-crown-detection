@@ -3,16 +3,16 @@
 
 import numpy as np
 
-def image_normalize(im, axis = (0,1), c = 1e-8):
-    '''
-    Normalize to zero mean and unit standard deviation along the given axis'''
+
+def image_normalize(im, axis=(0, 1), c=1e-8):
+    """
+    Normalize to zero mean and unit standard deviation along the given axis"""
     return (im - im.mean(axis)) / (im.std(axis) + c)
-   
- 
+
+
 # Each area (ndvi, pan, annotation, weight) is represented as an Frame
 class FrameInfo:
-    """ Defines a frame, includes its constituent images, annotation and weights (for weighted loss).
-    """
+    """Defines a frame, includes its constituent images, annotation and weights (for weighted loss)."""
 
     def __init__(self, img, annotations, weight, dtype=np.float32):
         """FrameInfo constructor.
@@ -47,18 +47,21 @@ class FrameInfo:
                 Total size of the images from which the patch is generated.
         """
         patch = np.zeros(patch_size, dtype=self.dtype)
-    
-        im = self.img[i:i + img_size[0], j:j + img_size[1]]
+
+        im = self.img[i : i + img_size[0], j : j + img_size[1]]
         r = np.random.random(1)
         if normalize >= r[0]:
             im = image_normalize(im, axis=(0, 1))
-        an = self.annotations[i:i + img_size[0], j:j + img_size[1]]
+        an = self.annotations[i : i + img_size[0], j : j + img_size[1]]
         an = np.expand_dims(an, axis=-1)
-        we = self.weight[i:i + img_size[0], j:j + img_size[1]]
+        we = self.weight[i : i + img_size[0], j : j + img_size[1]]
         we = np.expand_dims(we, axis=-1)
         comb_img = np.concatenate((im, an, we), axis=-1)
-        patch[:img_size[0], :img_size[1], ] = comb_img
-        return (patch)
+        patch[
+            : img_size[0],
+            : img_size[1],
+        ] = comb_img
+        return patch
 
     # Returns all patches in a image, sequentially generated
     def sequential_patches(self, patch_size, step_size, normalize):
@@ -75,9 +78,9 @@ class FrameInfo:
         img_shape = self.img.shape
         x = range(0, img_shape[0] - patch_size[0], step_size[0])
         y = range(0, img_shape[1] - patch_size[1], step_size[1])
-        if (img_shape[0] <= patch_size[0]):
+        if img_shape[0] <= patch_size[0]:
             x = [0]
-        if (img_shape[1] <= patch_size[1]):
+        if img_shape[1] <= patch_size[1]:
             y = [0]
 
         ic = (min(img_shape[0], patch_size[0]), min(img_shape[1], patch_size[1]))
@@ -87,7 +90,7 @@ class FrameInfo:
             img_patch = self.getPatch(i, j, patch_size, ic, normalize)
             img_patches.append(img_patch)
         # print(len(img_patches))
-        return (img_patches)
+        return img_patches
 
     # Returns a single patch, startring at a random image
     def random_patch(self, patch_size, normalize):
@@ -100,14 +103,14 @@ class FrameInfo:
                 Probability with which a frame is normalized.
         """
         img_shape = self.img.shape
-        if (img_shape[0] <= patch_size[0]):
+        if img_shape[0] <= patch_size[0]:
             x = 0
         else:
             x = np.random.randint(0, img_shape[0] - patch_size[0])
-        if (img_shape[1] <= patch_size[1]):
+        if img_shape[1] <= patch_size[1]:
             y = 0
         else:
             y = np.random.randint(0, img_shape[1] - patch_size[1])
         ic = (min(img_shape[0], patch_size[0]), min(img_shape[1], patch_size[1]))
         img_patch = self.getPatch(x, y, patch_size, ic, normalize)
-        return (img_patch)
+        return img_patch

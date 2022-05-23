@@ -38,10 +38,12 @@ from osgeo import ogr
 
 
 def Usage():
-    print("""
+    print(
+        """
 gdal_polygonize [-8] [-nomask] [-mask filename] raster_file [-b band|mask]
                 [-q] [-f ogr_format] out_file [layer] [fieldname]
-""")
+"""
+    )
     sys.exit(1)
 
 
@@ -52,7 +54,7 @@ def DoesDriverHandleExtension(drv, ext):
 
 def GetExtension(filename):
     ext = os.path.splitext(filename)[1]
-    if ext.startswith('.'):
+    if ext.startswith("."):
         ext = ext[1:]
     return ext
 
@@ -62,9 +64,10 @@ def GetOutputDriversFor(filename):
     ext = GetExtension(filename)
     for i in range(gdal.GetDriverCount()):
         drv = gdal.GetDriver(i)
-        if (drv.GetMetadataItem(gdal.DCAP_CREATE) is not None or
-            drv.GetMetadataItem(gdal.DCAP_CREATECOPY) is not None) and \
-           drv.GetMetadataItem(gdal.DCAP_VECTOR) is not None:
+        if (
+            drv.GetMetadataItem(gdal.DCAP_CREATE) is not None
+            or drv.GetMetadataItem(gdal.DCAP_CREATECOPY) is not None
+        ) and drv.GetMetadataItem(gdal.DCAP_VECTOR) is not None:
             if ext and DoesDriverHandleExtension(drv, ext):
                 drv_list.append(drv.ShortName)
             else:
@@ -80,12 +83,16 @@ def GetOutputDriverFor(filename):
     ext = GetExtension(filename)
     if not drv_list:
         if not ext:
-            return 'ESRI Shapefile'
+            return "ESRI Shapefile"
         else:
             raise Exception("Cannot guess driver for %s" % filename)
     elif len(drv_list) > 1:
-        print("Several drivers matching %s extension. Using %s" % (ext if ext else '', drv_list[0]))
+        print(
+            "Several drivers matching %s extension. Using %s"
+            % (ext if ext else "", drv_list[0])
+        )
     return drv_list[0]
+
 
 # =============================================================================
 # 	Mainline
@@ -103,7 +110,7 @@ dst_layername = None
 dst_fieldname = None
 dst_field = -1
 
-mask = 'default'
+mask = "default"
 
 gdal.AllRegister()
 argv = gdal.GeneralCmdLineProcessor(sys.argv)
@@ -115,26 +122,26 @@ i = 1
 while i < len(argv):
     arg = argv[i]
 
-    if arg == '-f' or arg == '-of':
+    if arg == "-f" or arg == "-of":
         i = i + 1
         frmt = argv[i]
 
-    elif arg == '-q' or arg == '-quiet':
+    elif arg == "-q" or arg == "-quiet":
         quiet_flag = 1
 
-    elif arg == '-8':
-        options.append('8CONNECTED=8')
+    elif arg == "-8":
+        options.append("8CONNECTED=8")
 
-    elif arg == '-nomask':
-        mask = 'none'
+    elif arg == "-nomask":
+        mask = "none"
 
-    elif arg == '-mask':
+    elif arg == "-mask":
         i = i + 1
         mask = argv[i]
 
-    elif arg == '-b':
+    elif arg == "-b":
         i = i + 1
-        if argv[i].startswith('mask'):
+        if argv[i].startswith("mask"):
             src_band_n = argv[i]
         else:
             src_band_n = int(argv[i])
@@ -163,7 +170,7 @@ if frmt is None:
     frmt = GetOutputDriverFor(dst_filename)
 
 if dst_layername is None:
-    dst_layername = 'out'
+    dst_layername = "out"
 
 # =============================================================================
 # 	Verify we have next gen bindings with the polygonize method.
@@ -171,10 +178,10 @@ if dst_layername is None:
 try:
     gdal.Polygonize
 except AttributeError:
-    print('')
+    print("")
     print('gdal.Polygonize() not available.  You are likely using "old gen"')
-    print('bindings or an older version of the next gen bindings.')
-    print('')
+    print("bindings or an older version of the next gen bindings.")
+    print("")
     sys.exit(1)
 
 # =============================================================================
@@ -184,23 +191,23 @@ except AttributeError:
 src_ds = gdal.Open(src_filename)
 
 if src_ds is None:
-    print('Unable to open %s' % src_filename)
+    print("Unable to open %s" % src_filename)
     sys.exit(1)
 
-if src_band_n == 'mask':
+if src_band_n == "mask":
     srcband = src_ds.GetRasterBand(1).GetMaskBand()
     # Workaround the fact that most source bands have no dataset attached
-    options.append('DATASET_FOR_GEOREF=' + src_filename)
-elif isinstance(src_band_n, str) and src_band_n.startswith('mask,'):
-    srcband = src_ds.GetRasterBand(int(src_band_n[len('mask,'):])).GetMaskBand()
+    options.append("DATASET_FOR_GEOREF=" + src_filename)
+elif isinstance(src_band_n, str) and src_band_n.startswith("mask,"):
+    srcband = src_ds.GetRasterBand(int(src_band_n[len("mask,") :])).GetMaskBand()
     # Workaround the fact that most source bands have no dataset attached
-    options.append('DATASET_FOR_GEOREF=' + src_filename)
+    options.append("DATASET_FOR_GEOREF=" + src_filename)
 else:
     srcband = src_ds.GetRasterBand(src_band_n)
 
-if mask == 'default':
+if mask == "default":
     maskband = srcband.GetMaskBand()
-elif mask == 'none':
+elif mask == "none":
     maskband = None
 else:
     mask_ds = gdal.Open(mask)
@@ -211,7 +218,7 @@ else:
 # =============================================================================
 
 try:
-    gdal.PushErrorHandler('CPLQuietErrorHandler')
+    gdal.PushErrorHandler("CPLQuietErrorHandler")
     dst_ds = ogr.Open(dst_filename, update=1)
     gdal.PopErrorHandler()
 except:
@@ -223,7 +230,7 @@ except:
 if dst_ds is None:
     drv = ogr.GetDriverByName(frmt)
     if not quiet_flag:
-        print('Creating output %s of format %s.' % (dst_filename, frmt))
+        print("Creating output %s of format %s." % (dst_filename, frmt))
     dst_ds = drv.CreateDataSource(dst_filename)
 
 # =============================================================================
@@ -240,7 +247,7 @@ if dst_layer is None:
     dst_layer = dst_ds.CreateLayer(dst_layername, geom_type=ogr.wkbPolygon, srs=srs)
 
     if dst_fieldname is None:
-        dst_fieldname = 'DN'
+        dst_fieldname = "DN"
 
     fd = ogr.FieldDefn(dst_fieldname, ogr.OFTInteger)
     dst_layer.CreateField(fd)
@@ -249,7 +256,10 @@ else:
     if dst_fieldname is not None:
         dst_field = dst_layer.GetLayerDefn().GetFieldIndex(dst_fieldname)
         if dst_field < 0:
-            print("Warning: cannot find field '%s' in layer '%s'" % (dst_fieldname, dst_layername))
+            print(
+                "Warning: cannot find field '%s' in layer '%s'"
+                % (dst_fieldname, dst_layername)
+            )
 
 # =============================================================================
 # Invoke algorithm.
@@ -260,8 +270,9 @@ if quiet_flag:
 else:
     prog_func = gdal.TermProgress_nocb
 
-result = gdal.Polygonize(srcband, maskband, dst_layer, dst_field, options,
-                         callback=prog_func)
+result = gdal.Polygonize(
+    srcband, maskband, dst_layer, dst_field, options, callback=prog_func
+)
 
 srcband = None
 src_ds = None

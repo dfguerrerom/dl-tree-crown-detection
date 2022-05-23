@@ -9,31 +9,40 @@ import numpy as np
 # e.g. Sometimes(0.5, GaussianBlur(0.3)) would blur roughly every second image.
 def imageAugmentationWithIAA():
     sometimes = lambda aug, prob=0.5: iaa.Sometimes(prob, aug)
-    seq = iaa.Sequential([
-        # Basic aug without changing any values
-        iaa.Fliplr(0.5),  # horizontally flip 50% of all images
-        iaa.Flipud(0.5),  # vertically flip 20% of all images
-        sometimes(iaa.Crop(percent=(0, 0.1))),  # random crops
-        #
-        # # Gaussian blur and gamma contrast
-        #sometimes(iaa.GaussianBlur(sigma=(0, 0.3)), 0.3),
-        # sometimes(iaa.GammaContrast(gamma=0.5, per_channel=True), 0.3),
-
-        # iaa.CoarseDropout((0.03, 0.25), size_percent=(0.02, 0.05), per_channel=True)
-        # sometimes(iaa.Multiply((0.75, 1.25), per_channel=True), 0.3),
-        sometimes(iaa.LinearContrast((0.3, 1.2)), 0.3),
-        # iaa.Add(value=(-0.5,0.5),per_channel=True),
-        sometimes(iaa.PiecewiseAffine(0.05), 0.3),
-        sometimes(iaa.PerspectiveTransform(0.01), 0.1)
-    ],
-        random_order=True)
+    seq = iaa.Sequential(
+        [
+            # Basic aug without changing any values
+            iaa.Fliplr(0.5),  # horizontally flip 50% of all images
+            iaa.Flipud(0.5),  # vertically flip 20% of all images
+            sometimes(iaa.Crop(percent=(0, 0.1))),  # random crops
+            #
+            # # Gaussian blur and gamma contrast
+            # sometimes(iaa.GaussianBlur(sigma=(0, 0.3)), 0.3),
+            # sometimes(iaa.GammaContrast(gamma=0.5, per_channel=True), 0.3),
+            # iaa.CoarseDropout((0.03, 0.25), size_percent=(0.02, 0.05), per_channel=True)
+            # sometimes(iaa.Multiply((0.75, 1.25), per_channel=True), 0.3),
+            sometimes(iaa.LinearContrast((0.3, 1.2)), 0.3),
+            # iaa.Add(value=(-0.5,0.5),per_channel=True),
+            sometimes(iaa.PiecewiseAffine(0.05), 0.3),
+            sometimes(iaa.PerspectiveTransform(0.01), 0.1),
+        ],
+        random_order=True,
+    )
     return seq
 
-class DataGenerator():
-    """The datagenerator class. Defines methods for generating patches randomly and sequentially from given frames.
-    """
 
-    def __init__(self, input_image_channel, patch_size, frame_list, frames, annotation_channel = [2,3], augmenter=None):
+class DataGenerator:
+    """The datagenerator class. Defines methods for generating patches randomly and sequentially from given frames."""
+
+    def __init__(
+        self,
+        input_image_channel,
+        patch_size,
+        frame_list,
+        frames,
+        annotation_channel=[2, 3],
+        augmenter=None,
+    ):
         """Datagenerator constructor
 
         Args:
@@ -51,11 +60,11 @@ class DataGenerator():
         self.augmenter = augmenter
 
     # Return all training and label images and weights, generated sequentially with the given step size
-    def all_sequential_patches(self, step_size, normalize = 1):
+    def all_sequential_patches(self, step_size, normalize=1):
         """Generate all patches from all assigned frames sequentially.
 
-            step_size (tuple(int,int)): Size of the step when generating frames.
-            normalize (float): Probability with which a frame is normalized.
+        step_size (tuple(int,int)): Size of the step when generating frames.
+        normalize (float): Probability with which a frame is normalized.
         """
         patches = []
         for fn in self.frame_list:
@@ -66,12 +75,12 @@ class DataGenerator():
         img = data[..., self.input_image_channel]
         y = data[..., self.annotation_channel]
         # y would have two channels, i.e. annotations and weights.
-        ann = y[...,[0]]
-        #boundaries have a weight of 10 other parts of the image has weight 1
-        weights = y[...,[1]]
-        weights[weights>=0.5] = 10
-        weights[weights<0.5] = 1
-        ann_joint = np.concatenate((ann,weights), axis=-1)
+        ann = y[..., [0]]
+        # boundaries have a weight of 10 other parts of the image has weight 1
+        weights = y[..., [1]]
+        weights[weights >= 0.5] = 10
+        weights[weights < 0.5] = 1
+        ann_joint = np.concatenate((ann, weights), axis=-1)
         return (img, ann_joint)
 
     # Return a batch of training and label images, generated randomly
@@ -93,10 +102,11 @@ class DataGenerator():
         img = data[..., self.input_image_channel]
         ann_joint = data[..., self.annotation_channel]
         return (img, ann_joint)
-#     print("Wrote {} random patches to {} with patch size {}".format(count,write_dir,patch_size))
+
+    #     print("Wrote {} random patches to {} with patch size {}".format(count,write_dir,patch_size))
 
     # Normalization takes a probability between 0 and 1 that an image will be locally normalized.
-    def random_generator(self, BATCH_SIZE, normalize = 1):
+    def random_generator(self, BATCH_SIZE, normalize=1):
         """Generator for random patches, yields random patches from random location in randomly chosen frames.
 
         Args:
@@ -107,29 +117,29 @@ class DataGenerator():
 
         while True:
             X, y = self.random_patch(BATCH_SIZE, normalize)
-            if self.augmenter == 'iaa':
+            if self.augmenter == "iaa":
                 seq_det = seq.to_deterministic()
                 X = seq_det.augment_images(X)
                 # y would have two channels, i.e. annotations and weights. We need to augment y for operations such as crop and transform
                 y = seq_det.augment_images(y)
                 # Some augmentations can change the value of y, so we re-assign values just to be sure.
-                ann =  y[...,[0]]
-                ann[ann<0.5] = 0
-                ann[ann>=0.5] = 1
-                #boundaries have a weight of 10 other parts of the image has weight 1
-                weights = y[...,[1]]
-                weights[weights>=0.5] = 10
-                weights[weights<0.5] = 1
+                ann = y[..., [0]]
+                ann[ann < 0.5] = 0
+                ann[ann >= 0.5] = 1
+                # boundaries have a weight of 10 other parts of the image has weight 1
+                weights = y[..., [1]]
+                weights[weights >= 0.5] = 10
+                weights[weights < 0.5] = 1
 
-                ann_joint = np.concatenate((ann,weights), axis=-1)
+                ann_joint = np.concatenate((ann, weights), axis=-1)
                 yield X, ann_joint
             else:
                 # y would have two channels, i.e. annotations and weights.
-                ann =  y[...,[0]]
-                #boundaries have a weight of 10 other parts of the image has weight 1
-                weights = y[...,[1]]
-                weights[weights>=0.5] = 10
-                weights[weights<0.5] = 1
+                ann = y[..., [0]]
+                # boundaries have a weight of 10 other parts of the image has weight 1
+                weights = y[..., [1]]
+                weights[weights >= 0.5] = 10
+                weights[weights < 0.5] = 1
 
-                ann_joint = np.concatenate((ann,weights), axis=-1)
+                ann_joint = np.concatenate((ann, weights), axis=-1)
                 yield X, ann_joint
