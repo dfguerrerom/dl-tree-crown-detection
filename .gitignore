@@ -6,6 +6,9 @@ training_data/
 test/
 *Untitled*
 *no_sync*
+*saved_models*
+*test*
+*log*
 
 # C extensions
 *.so
