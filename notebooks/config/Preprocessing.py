@@ -26,7 +26,7 @@ class Configuration:
         # For writing the extracted images and their corresponding
         # annotations and boundary file
         self.path_to_write = Path(
-            "/home/dguerrero/1_modules/3_WADL/notebooks/training_data/0_raw/1_processed"
+            "/home/dguerrero/1_modules/3_WADL/notebooks/training_data/1_processed"
         )
         self.show_boundaries_during_processing = False
         self.extracted_file_type = ".png"

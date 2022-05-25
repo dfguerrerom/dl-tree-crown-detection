@@ -1,15 +1,15 @@
+from pathlib import Path
 import os
 
 # Configuration of the parameters for the 2-UNetTraining.ipynb notebook
 class Configuration:
     def __init__(self):
-        # Initialize the data related variables used in the notebook
-        # For reading the ndvi, pan and annotated images generated in the Preprocessing step.
-        # In most cases, they will take the same value as in the config/Preprocessing.py
-        self.base_dir = ""
+        self.base_dir = Path(
+            "/home/dguerrero/1_modules/3_WADL/notebooks/training_data/1_processed"
+        )
+        
+
         self.image_type = ".png"
-        self.ndvi_fn = "ndvi"
-        self.pan_fn = "pan"
         self.annotation_fn = "annotation"
         self.weight_fn = "boundary"
 
@@ -21,30 +21,38 @@ class Configuration:
         # of patches are extracted on demand.
         
         # sequential: training areas are selected in the given order and patches 
-        # extracted from these areas sequential with a given step size. All the possible
+        # extracted from these areas sequential with a given step size. All the 
+        # possible
         # patches are returned in one call.
         
         self.patch_generation_stratergy = "random"  # 'random' or 'sequential'
-        self.patch_size = (256, 256, 4)  # Height * Width * (Input + Output) channels
+        self.patch_size = (256, 256, 6)  # Height * Width * (Input + Output) channels
         # # When stratergy == sequential, then you need the step_size as well
         # step_size = (128,128)
 
-        # The training areas are divided into training, validation and testing set. Note that training area can have different sizes, so it doesn't guarantee that the final generated patches (when using sequential stratergy) will be in the same ratio.
+        # The training areas are divided into training, validation and testing set. 
+        # Note that training area can have different sizes, so it doesn't guarantee 
+        # that the final generated patches (when using sequential stratergy) will be in 
+        # the same ratio.
         self.test_ratio = 0.2
         self.val_ratio = 0.2
 
-        # Probability with which the generated patches should be normalized 0 -> don't normalize, 1 -> normalize all
+        # Probability with which the generated patches should be normalized 0 -> don't 
+        # normalize, 1 -> normalize all
         self.normalize = 0.4
 
-        # The split of training areas into training, validation and testing set, is cached in patch_dir.
-        self.patch_dir = "./patches{}".format(self.patch_size[0])
-        self.frames_json = os.path.join(self.patch_dir, "frames_list.json")
+        # The split of training areas into training, validation and testing set, is
+        # cached in patch_dir.
+        self.patch_dir = self.base_dir/f"patches{self.patch_size[0]}"
+        self.patch_dir.mkdir(exist_ok=True, parents=True)
+        
+        self.frames_json = self.patch_dir/"frames_list.json"
 
         # Shape of the input data, height*width*channel; Here channels are NVDI and Pan
-        self.input_shape = (256, 256, 2)
-        self.input_image_channel = [0, 1]
-        self.input_label_channel = [2]
-        self.input_weight_channel = [3]
+        self.input_shape = (256, 256, 4)
+        self.input_image_channel = [0, 1, 2, 3]
+        self.input_label_channel = [4]
+        self.input_weight_channel = [5]
 
         # CNN model related variables used in the notebook
         self.BATCH_SIZE = 8

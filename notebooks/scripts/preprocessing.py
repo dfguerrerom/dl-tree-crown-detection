@@ -5,8 +5,6 @@ import PIL.ImageDraw
 import numpy as np
 import rasterio as rio  # I/O raster data (netcdf, height, geotiff, ...)
 import rasterio.mask
-import rasterio.warp  # Reproject raster samples
-import rasterio.merge
 import geopandas as gpd
 import pandas as pd
 from shapely.geometry import box
@@ -126,7 +124,7 @@ def dividePolygonsInTrainingAreas(trainingPolygon, trainingArea):
 
 def read_input_images(raw_image_base_dir, raw_image_file_type, raw_image_suffix):
     """Reads all images  in the image_base_dir directory."""
-
+    
     return [
         path
         for path in raw_image_base_dir.rglob(f"*{raw_image_file_type}")
@@ -189,13 +187,14 @@ def rowColPolygons(area_df, areaShape, profile, filename, outline, fill):
 
     mask = drawPolygons(polygons, areaShape, outline=outline, fill=fill)
     profile["dtype"] = rio.int16
+    profile["count"] = 1
 
     with rio.open(filename.with_suffix(".png"), "w", **profile) as dst:
         dst.write(mask.astype(rio.int16), 1)
 
 
 def writeExtractedImageAndAnnotation(
-    img,
+    name,
     sm,
     profile,
     polygonsInAreaDf,
@@ -225,60 +224,36 @@ def writeExtractedImageAndAnnotation(
     boundary_folder = writePath / boundary_folder
     boundary_folder.mkdir(exist_ok=True, parents=True)
 
-    name = Path(img.name).name
+    with rio.open(bands_folder / f"{name}_id{area_id}.png", "w", **profile) as dst:
+        for band in range(len(bands)):
+            norm_band = image_normalize(sm[0][band]).astype(profile["dtype"])
+            dst.write(norm_band, band+1)
 
-    try:
-        for band in bands:
-            # rio reads file channel first, so the sm[0] has the shape [1
-            # or ch_count, x,y]
-            # If raster has multiple channels, then bands will be [0, 1, ...]
-            # otherwise simply [0]
-
-            dt = sm[0][band].astype(profile["dtype"])
-
-            if normalize:
-                # Note: If the raster contains None values, then you should normalize
-                # it separately by calculating the mean and std without those values.
-                dt = image_normalize(dt, axis=None)
-                #  Normalize the image along the width and height,
-                # and since here we only have one channel we pass axis as None
-            with rio.open(
-                bands_folder / f"{name}_b{band}_id{area_id}.png", "w", **profile
-            ) as dst:
-                dst.write(dt, 1)
-
-        if annotation_folder:
-            annotation_json_filepath = annotation_folder / f"{name}_id{area_id}.json"
-            # The object is given a value of 1, the outline or the border of the
-            # object is given a value of 0 and rest of the image/background is
-            # given a value of 0
-            rowColPolygons(
-                polygonsInAreaDf,
-                (sm[0].shape[1], sm[0].shape[2]),
-                profile,
-                annotation_json_filepath,
-                outline=0,
-                fill=1,
-            )
-        if boundary_folder:
-            boundary_json_filepath = boundary_folder / f"{name}_id{area_id}.json"
-            # The boundaries are given a value of 1, the outline or the border of the
-            # boundaries is also given a value of 1 and rest is given a value of 0
-            rowColPolygons(
-                boundariesInAreaDf,
-                (sm[0].shape[1], sm[0].shape[2]),
-                profile,
-                boundary_json_filepath,
-                outline=1,
-                fill=1,
-            )
-
-    except Exception as e:
-        print(e)
-        print(
-            "Something nasty happened, could not write the annotation or the mask file!"
+    if annotation_folder:
+        annotation_json_filepath = annotation_folder / f"{name}_id{area_id}.json"
+        # The object is given a value of 1, the outline or the border of the
+        # object is given a value of 0 and rest of the image/background is
+        # given a value of 0
+        rowColPolygons(
+            polygonsInAreaDf,
+            (sm[0].shape[1], sm[0].shape[2]),
+            profile,
+            annotation_json_filepath,
+            outline=0,
+            fill=1,
         )
-
+    if boundary_folder:
+        boundary_json_filepath = boundary_folder / f"{name}_id{area_id}.json"
+        # The boundaries are given a value of 1, the outline or the border of the
+        # boundaries is also given a value of 1 and rest is given a value of 0
+        rowColPolygons(
+            boundariesInAreaDf,
+            (sm[0].shape[1], sm[0].shape[2]),
+            profile,
+            boundary_json_filepath,
+            outline=1,
+            fill=1,
+        )
 
 def findOverlap(
     input_images,
@@ -301,7 +276,8 @@ def findOverlap(
     overlaps = {image.name: [] for image in input_images}
 
     for img_path, area_id in itertools.product(input_images, areas_with_polygons):
-
+        
+        name = img_path.stem
         img = rio.open(img_path)
 
         areaInfo = areas_with_polygons[area_id]
@@ -325,13 +301,12 @@ def findOverlap(
             # So I set the blockxsize and blockysize to prevent this problem
             profile["blockxsize"] = 32
             profile["blockysize"] = 32
-            profile["count"] = 1
             profile["dtype"] = rio.float32
             # writeExtractedImageAndAnnotation writes the image, annotation and
             # boundaries and returns the counter of the next file to write.
 
             writeExtractedImageAndAnnotation(
-                img,
+                name,
                 sm,
                 profile,
                 polygonsInAreaDf,

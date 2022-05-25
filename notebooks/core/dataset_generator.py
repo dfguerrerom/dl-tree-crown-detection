@@ -19,7 +19,8 @@ def imageAugmentationWithIAA():
             # # Gaussian blur and gamma contrast
             # sometimes(iaa.GaussianBlur(sigma=(0, 0.3)), 0.3),
             # sometimes(iaa.GammaContrast(gamma=0.5, per_channel=True), 0.3),
-            # iaa.CoarseDropout((0.03, 0.25), size_percent=(0.02, 0.05), per_channel=True)
+            # iaa.CoarseDropout((0.03, 0.25), size_percent=(0.02, 0.05), 
+            # per_channel=True)
             # sometimes(iaa.Multiply((0.75, 1.25), per_channel=True), 0.3),
             sometimes(iaa.LinearContrast((0.3, 1.2)), 0.3),
             # iaa.Add(value=(-0.5,0.5),per_channel=True),
@@ -32,7 +33,8 @@ def imageAugmentationWithIAA():
 
 
 class DataGenerator:
-    """The datagenerator class. Defines methods for generating patches randomly and sequentially from given frames."""
+    """The datagenerator class. Defines methods for generating patches randomly and
+    sequentially from given frames."""
 
     def __init__(
         self,
@@ -46,11 +48,15 @@ class DataGenerator:
         """Datagenerator constructor
 
         Args:
-            input_image_channel (list(int)): Describes which channels is the image are input channels.
+            input_image_channel (list(int)): Describes which channels is the image 
+            are input channels.
             patch_size (tuple(int,int)): Size of the generated patch.
-            frame_list (list(int)): List containing the indexes of frames to be assigned to this generator.
-            frames (list(FrameInfo)): List containing all the frames i.e. instances of the frame class.
-            augmenter  (string, optional): augmenter to use. None for no augmentation and iaa for augmentations defined in imageAugmentationWithIAA function.
+            frame_list (list(int)): List containing the indexes of frames to be assigned
+            to this generator.
+            frames (list(FrameInfo)): List containing all the frames i.e. instances of
+            the frame class.
+            augmenter  (string, optional): augmenter to use. None for no augmentation
+            and iaa for augmentations defined in imageAugmentationWithIAA function.
         """
         self.input_image_channel = input_image_channel
         self.patch_size = patch_size
@@ -59,7 +65,8 @@ class DataGenerator:
         self.annotation_channel = annotation_channel
         self.augmenter = augmenter
 
-    # Return all training and label images and weights, generated sequentially with the given step size
+    # Return all training and label images and weights, generated sequentially with the
+    # given step size
     def all_sequential_patches(self, step_size, normalize=1):
         """Generate all patches from all assigned frames sequentially.
 
@@ -103,26 +110,34 @@ class DataGenerator:
         ann_joint = data[..., self.annotation_channel]
         return (img, ann_joint)
 
-    #     print("Wrote {} random patches to {} with patch size {}".format(count,write_dir,patch_size))
+    #     print("Wrote {} random patches to {} with patch size
+    # {}".format(count,write_dir,patch_size))
 
-    # Normalization takes a probability between 0 and 1 that an image will be locally normalized.
+    # Normalization takes a probability between 0 and 1 that an image will be locally
+    # normalized.
     def random_generator(self, BATCH_SIZE, normalize=1):
-        """Generator for random patches, yields random patches from random location in randomly chosen frames.
+        """Generator for random patches, yields random patches from random location 
+        in randomly chosen frames.
 
         Args:
-            BATCH_SIZE (int): Number of patches to generate in each yield (sampled independently).
+            BATCH_SIZE (int): Number of patches to generate in each yield (sampled
+            independently).
             normalize (float): Probability with which a frame is normalized.
         """
         seq = imageAugmentationWithIAA()
 
         while True:
             X, y = self.random_patch(BATCH_SIZE, normalize)
+        
+            # X, y = self.all_sequential_patches((128,128), normalize)
             if self.augmenter == "iaa":
                 seq_det = seq.to_deterministic()
                 X = seq_det.augment_images(X)
-                # y would have two channels, i.e. annotations and weights. We need to augment y for operations such as crop and transform
+                # y would have two channels, i.e. annotations and weights. We need to
+                # augment y for operations such as crop and transform
                 y = seq_det.augment_images(y)
-                # Some augmentations can change the value of y, so we re-assign values just to be sure.
+                # Some augmentations can change the value of y, so we re-assign values
+                # just to be sure.
                 ann = y[..., [0]]
                 ann[ann < 0.5] = 0
                 ann[ann >= 0.5] = 1

@@ -1,20 +1,18 @@
 #    Edited by Sizhuo Li
 #    Author: Ankit Kariryaa, University of Bremen
-
+import re
 import numpy as np
 
-
-def image_normalize(im, axis=(0, 1), c=1e-8):
-    """
-    Normalize to zero mean and unit standard deviation along the given axis"""
-    return (im - im.mean(axis)) / (im.std(axis) + c)
-
+def image_normalize(array, axis=(0, 1)):
+    """Normalize to zero mean and unit standard deviation along the given axis"""
+    return (array - array.mean(axis)) / (array.std(axis) + 1e-8)
 
 # Each area (ndvi, pan, annotation, weight) is represented as an Frame
 class FrameInfo:
-    """Defines a frame, includes its constituent images, annotation and weights (for weighted loss)."""
+    """Defines a frame, includes its constituent images, annotation and weights 
+    (for weighted loss)."""
 
-    def __init__(self, img, annotations, weight, dtype=np.float32):
+    def __init__(self, img, annotations, weight, image_name, dtype=np.float32):
         """FrameInfo constructor.
 
         Args:
@@ -26,13 +24,28 @@ class FrameInfo:
                 3D array containing weights for certain losses.
             dtype: np.float32, optional
                 datatype of the array.
+            image_name: name of the input associated imaged. Useful to get training_area
+                param
+        Params:
+            id (int): Id of the training area the frame belongs. i.e. shape
+                file id.
         """
         self.img = img
         self.annotations = annotations
         self.weight = weight
         self.dtype = dtype
-
-    # Normalization takes a probability between 0 and 1 that an image will be locally normalized.
+        self.id = self.get_training_area_id(image_name)
+        
+    
+    def get_training_area_id(self, image_name):
+        """Extract training area id by using the image name"""
+        
+        # The id is a number just after "id" word in name
+        match = re.search(r"id\d+", image_name)
+        return match.group().split("id")[-1]
+        
+    # Normalization takes a probability between 0 and 1 that an image will be 
+    # locally normalized.
     def getPatch(self, i, j, patch_size, img_size, normalize=1.0):
         """Function to get patch from the given location of the given size.
 
