@@ -7,7 +7,6 @@ class Configuration:
         self.base_dir = Path(
             "/home/dguerrero/1_modules/3_WADL/notebooks/training_data/1_processed"
         )
-        
 
         self.image_type = ".png"
         self.annotation_fn = "annotation"

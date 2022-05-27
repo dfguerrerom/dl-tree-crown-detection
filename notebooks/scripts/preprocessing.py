@@ -124,7 +124,7 @@ def dividePolygonsInTrainingAreas(trainingPolygon, trainingArea):
 
 def read_input_images(raw_image_base_dir, raw_image_file_type, raw_image_suffix):
     """Reads all images  in the image_base_dir directory."""
-    
+
     return [
         path
         for path in raw_image_base_dir.rglob(f"*{raw_image_file_type}")
@@ -227,7 +227,7 @@ def writeExtractedImageAndAnnotation(
     with rio.open(bands_folder / f"{name}_id{area_id}.png", "w", **profile) as dst:
         for band in range(len(bands)):
             norm_band = image_normalize(sm[0][band]).astype(profile["dtype"])
-            dst.write(norm_band, band+1)
+            dst.write(norm_band, band + 1)
 
     if annotation_folder:
         annotation_json_filepath = annotation_folder / f"{name}_id{area_id}.json"
@@ -255,6 +255,7 @@ def writeExtractedImageAndAnnotation(
             fill=1,
         )
 
+
 def findOverlap(
     input_images,
     areas_with_polygons,
@@ -276,7 +277,7 @@ def findOverlap(
     overlaps = {image.name: [] for image in input_images}
 
     for img_path, area_id in itertools.product(input_images, areas_with_polygons):
-        
+
         name = img_path.stem
         img = rio.open(img_path)
 

@@ -8,12 +8,12 @@ class Configuration:
     def __init__(self):
 
         # Input related variables
-        self.input_image_dir = ""
+        self.input_image_dir = Path("./training_data/0_raw/images/")
         self.input_image_type = ".tif"
         self.model_path = Path("./saved_models/UNet/")
 
         # Output related variables
-        self.output_dir = ""
+        self.output_dir = Path("./training_data/2_predictions/images/")
         self.output_image_type = ".tif"
         self.output_prefix = "det_"
         self.output_shapefile_type = ".shp"
