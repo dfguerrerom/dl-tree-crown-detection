@@ -1,3 +1,4 @@
+from importlib import reload
 import itertools
 from pathlib import Path
 import matplotlib.pyplot as plt  # plotting tools
@@ -12,11 +13,12 @@ import json
 from IPython.core.interactiveshell import InteractiveShell
 from tqdm import tqdm_notebook as tqdm
 import warnings
+import config.conf as conf
 
 from core.frame_info import image_normalize
-from config.Preprocessing import Configuration
+conf = reload(conf)
+config = conf.Configuration()
 
-config = Configuration()
 warnings.filterwarnings("ignore")  # ignore annoying warnings
 InteractiveShell.ast_node_interactivity = "all"
 
@@ -69,6 +71,7 @@ def calculateBoundaryWeight(polygonsInArea, scale_polygon=1.5, output_plot=True)
     new_c = gpd.GeoSeries(new_c)
     new_cc = gpd.GeoDataFrame({"geometry": new_c})
     new_cc.columns = ["geometry"]
+    new_cc = new_cc[new_cc.geom_type == 'Polygon']
     bounda = gpd.overlay(new_cc, tempPolygonDf, how="difference")
     if output_plot:
         fig, ax = plt.subplots(figsize=(10, 10))
@@ -88,23 +91,26 @@ def calculateBoundaryWeight(polygonsInArea, scale_polygon=1.5, output_plot=True)
 # Weight map will be used by the weighted loss during the U-Net training
 
 
-def dividePolygonsInTrainingAreas(trainingPolygon, trainingArea):
+def dividePolygonsInTrainingAreas(polygons_df, areas_df):
     """
     Assign annotated ploygons in to the training areas.
     """
     # For efficiency, assigned polygons are removed from the list, we
     # make a copy here.
 
-    cpTrainingPolygon = trainingPolygon.copy()
-    splitPolygons = {}
-    for i in tqdm(trainingArea.index):
+    polygons_tmp = polygons_df.copy()
+    polygons_by_area = {}
+    
+    for idx, area_row in tqdm(areas_df.iterrows(), total=len(areas_df)):
+        
         spTemp = []
         allocated = []
-        for j in cpTrainingPolygon.index:
-            if trainingArea.loc[i]["geometry"].intersects(
-                cpTrainingPolygon.loc[j]["geometry"]
-            ):
-                spTemp.append(cpTrainingPolygon.loc[j])
+        
+        for pol_idx, pol_row in polygons_tmp.iterrows():
+            
+            if area_row.geometry.intersects(pol_row.geometry]):
+                
+                spTemp.append(pol_row)
                 allocated.append(j)
 
             # Order of bounds: minx miny maxx maxy
@@ -113,12 +119,15 @@ def dividePolygonsInTrainingAreas(trainingPolygon, trainingArea):
             scale_polygon=1.5,
             output_plot=config.show_boundaries_during_processing,
         )
-        splitPolygons[trainingArea.loc[i]["id"]] = {
+        
+        splitPolygons[area_idx] = {
             "polygons": spTemp,
             "boundaryWeight": boundary,
-            "bounds": list(trainingArea.bounds.loc[i]),
+            "bounds": list(area_row.geometry.bounds),
         }
+        
         cpTrainingPolygon = cpTrainingPolygon.drop(allocated)
+        
     return splitPolygons
 
 
@@ -214,23 +223,14 @@ def writeExtractedImageAndAnnotation(
     area_id (int): polyon area unique identificator
 
     """
-
-    bands_folder = writePath / bands_folder
-    bands_folder.mkdir(exist_ok=True, parents=True)
-
-    annotation_folder = writePath / annotation_folder
-    annotation_folder.mkdir(exist_ok=True, parents=True)
-
-    boundary_folder = writePath / boundary_folder
-    boundary_folder.mkdir(exist_ok=True, parents=True)
-
-    with rio.open(bands_folder / f"{name}_id{area_id}.png", "w", **profile) as dst:
+    
+    with rio.open(conf.out_image_dir / f"{name}_id{area_id}.png", "w", **profile) as dst:
         for band in range(len(bands)):
             norm_band = image_normalize(sm[0][band]).astype(profile["dtype"])
             dst.write(norm_band, band + 1)
 
     if annotation_folder:
-        annotation_json_filepath = annotation_folder / f"{name}_id{area_id}.json"
+        annotation_json_filepath = conf.annotation_folder / f"{name}_id{area_id}.json"
         # The object is given a value of 1, the outline or the border of the
         # object is given a value of 0 and rest of the image/background is
         # given a value of 0
@@ -243,7 +243,7 @@ def writeExtractedImageAndAnnotation(
             fill=1,
         )
     if boundary_folder:
-        boundary_json_filepath = boundary_folder / f"{name}_id{area_id}.json"
+        boundary_json_filepath = conf.boundary_folder / f"{name}_id{area_id}.json"
         # The boundaries are given a value of 1, the outline or the border of the
         # boundaries is also given a value of 1 and rest is given a value of 0
         rowColPolygons(
@@ -300,8 +300,6 @@ def findOverlap(
             # That's a problem with rio, if the height and the width are less
             # then 256 it throws: ValueError: blockysize exceeds raster height
             # So I set the blockxsize and blockysize to prevent this problem
-            profile["blockxsize"] = 32
-            profile["blockysize"] = 32
             profile["dtype"] = rio.float32
             # writeExtractedImageAndAnnotation writes the image, annotation and
             # boundaries and returns the counter of the next file to write.
