@@ -6,54 +6,38 @@ class Configuration:
     def __init__(self):
         
         # For reading the training areas and polygons
-        self.base_dir = Path("/home/dguerrero/1_modules/3_WADL/notebooks/")
+        self.base_dir = Path.home()/"1_modules/3_WADL/notebooks/"
         self.training_dir = self.base_dir/"training_afk/"
         
-        self.model_dir = self.training_dir/"saved_models/UNet"
-        
-        self.image_dir = self.training_dir/"0_raw/images"
+        self.train_image_dir = self.training_dir/"0_raw/images"
         self.annotation_dir = self.training_dir/"0_raw/annotation"
         self.boundary_dir = self.training_dir/"0_raw/boundary"
+        
+        self.image_dir = self.training_dir/"1_processed/image"
+        
+        self.training_area = self.annotation_dir/"220614_first_batch/220614_areas.shp"
+        self.training_polygon = self.annotation_dir/"220614_first_batch/220614_polygons_4326.shp"
+
+        self.model_dir = self.training_dir/"saved_models/UNet"
         
         self.path_to_write = self.training_dir/"1_processed"
         self.output_dir = self.training_dir/"2_prediction"
         self.patch_dir = self.training_dir/f"3_patches"
         
-        out_image_dir = self.path_to_write / "image"
-        out_annot_dir = self.path_to_write / "annotation"
-        out_bound_dir = self.path_to_write / "boundary"
+        self.out_image_dir = self.path_to_write / "image"
+        self.out_annot_dir = self.path_to_write / "annotation"
+        self.out_bound_dir = self.path_to_write / "boundary"
 
         # The split of training areas into training, validation and testing set, is
         # cached in patch_dir.
         
         self.frames_json = self.training_dir/"frames_list.json"
-        
-        folders = [
-            self.model_dir,
-            self.image_dir,
-            self.image_dir,
-            self.annotation_dir,
-            self.boundary_dir,
-            self.path_to_write,
-            self.output_dir,
-            self.patch_dir,
-            out_image_dir,
-            out_annot_dir,
-            out_bound_dir,
-        ]
-        
-        # Initialize folders
-        [f.mkdir(exist_ok=True, parents=True) for f in folders]
-        
-        
-        self.training_area_fn = self.training_dir/"0_raw/annotations/training_area_proj.shp"
-        self.training_polygon_fn = self.training_dir/"0_raw/annotations/training_polygons2.shp"
 
         # For reading the VHR images
-        self.bands = [0,1,2,3]
+        self.bands = [0,1,2,3,4,5,6,7]
         
         self.raw_image_file_type = ".tif"
-        self.raw_image_suffix = "harmonized_clip"
+        self.raw_image_suffix = "composite"
 
         self.show_boundaries_during_processing = False
         self.extracted_file_type = ".png"
@@ -62,12 +46,6 @@ class Configuration:
         self.extracted_boundary_folder = "boundary"
         # Path to write should be a valid directory
                 
-        if not len(os.listdir(self.path_to_write)) == 0:
-            print(
-                "Warning: path_to_write is not empty! The old files in the directory"
-                " may not be overwritten!!"
-            )
-                    
         self.image_type = ".png"
         self.annotation_fn = "annotation"
         self.weight_fn = "boundary"
@@ -85,7 +63,7 @@ class Configuration:
         # patches are returned in one call.
         
         self.patch_generation_stratergy = "random"  # 'random' or 'sequential'
-        self.patch_size = (256, 256, 6)  # Height * Width * (Input + Output) channels
+        self.patch_size = (256, 256, 10)  # Height * Width * (Input + Output) channels
         # # When stratergy == sequential, then you need the step_size as well
         # step_size = (128,128)
 
@@ -100,10 +78,8 @@ class Configuration:
         # normalize, 1 -> normalize all
         self.normalize = 0.4
 
-
-
         # Shape of the input data, height*width*channel; Here channels are NVDI and Pan
-        self.input_shape = (256, 256, 4)
+        self.input_shape = (256, 256, 8)
         self.input_image_channel = [0, 1, 2, 3]
         self.input_label_channel = [4]
         self.input_weight_channel = [5]
@@ -134,6 +110,9 @@ class Configuration:
         self.WIDTH = 256  # Should be same as the WIDTH used for training the model
         self.HEIGHT = 256  # Should be same as the HEIGHT used for training the model
         self.STRIDE = 224  # 224 or 196   # STRIDE = WIDTH means no overlap, 
-        # STRIDE = WIDTH/2 means 50 % overlap in prediction        
+        # STRIDE = WIDTH/2 means 50 % overlap in prediction
         
-conf = Configuration()
+        paths = [item for item in self.__dict__.values() if isinstance(item, Path)]
+        [path.mkdir(exist_ok=True, parents=True) for path in paths if not path.suffix]
+        
+config = Configuration()

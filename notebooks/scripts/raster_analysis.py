@@ -8,15 +8,15 @@ from shapely.geometry import Polygon, mapping
 import PIL.Image, PIL.ImageDraw
 from matplotlib.patches import Polygon
 
-from config import RasterAnalysis as config
+import config.conf as conf
 from core.frame_info import  image_normalize
 
 import logging
 logger = logging.getLogger()
 logger.setLevel(logging.CRITICAL)
 
-config = reload(config)
-config = config.Configuration()
+conf = reload(conf)
+config = conf.Configuration()
 
 # Methods to add results of a patch to the total results of a larger area. 
 # The operator could be min (useful if there are too many false positives), 
