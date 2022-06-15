@@ -24,63 +24,48 @@ InteractiveShell.ast_node_interactivity = "all"
 
 # Create boundary from polygon file
 def calculateBoundaryWeight(polygonsInArea, scale_polygon=1.5, output_plot=True):
-    """For each polygon, create a weighted boundary
-    where the weights of shared/close boundaries
-    is higher than weights of solitary boundaries.
-    """
+    """For each polygon, create a weighted boundary where the weights of shared/close 
+    boundaries is higher than weights of solitary boundaries."""
+    
     # If there are not polygons in a area, the boundary polygons return
     # an empty geo dataframe
-
     if not polygonsInArea:
         return gpd.GeoDataFrame({})
-    tempPolygonDf = pd.DataFrame(polygonsInArea)
-    tempPolygonDf.reset_index(drop=True, inplace=True)
-    tempPolygonDf = gpd.GeoDataFrame(tempPolygonDf.drop(columns=["id"]))
-    new_c = []
+
+    pol_df = gpd.GeoDataFrame(pd.DataFrame(polygonsInArea))
+    pol_df.reset_index(drop=True, inplace=True)
+    pol_df["scaled"] = pol_df[["geometry"]].scale(*[scale_polygon]*3, origin="center")
+
+    intersections = []
+    
     # for each polygon in area scale, compare with other polygons:
-    for i in tqdm(range(len(tempPolygonDf))):
-        pol1 = gpd.GeoSeries(tempPolygonDf.iloc[i]["geometry"])
-        sc = pol1.scale(
-            xfact=scale_polygon,
-            yfact=scale_polygon,
-            zfact=scale_polygon,
-            origin="center",
-        )
-        scc = pd.DataFrame(columns=["id", "geometry"])
-        scc = scc.append({"id": None, "geometry": sc[0]}, ignore_index=True)
-        scc = gpd.GeoDataFrame(pd.concat([scc] * len(tempPolygonDf), ignore_index=True))
+    for pol_idx, pol_row in tqdm(pol_df.iterrows(), total=len(pol_df)):
 
-        pol2 = gpd.GeoDataFrame(tempPolygonDf[~tempPolygonDf.index.isin([i])])
-        # scale pol2 also and then intersect, so in the end no need for scale
-        pol2 = gpd.GeoDataFrame(
-            pol2.scale(
-                xfact=scale_polygon,
-                yfact=scale_polygon,
-                zfact=scale_polygon,
-                origin="center",
-            )
-        )
-        pol2.columns = ["geometry"]
+        # Intersect all the dataframe with current pol_row.scaled geometry
+        intersect = pol_df[
+            ~pol_df.index.isin([pol_idx])
+        ]["scaled"].intersection(pol_row.scaled)
 
-        ints = scc.intersection(pol2)
-        for k in range(len(ints)):
-            if ints.iloc[k] is not None:
-                if ints.iloc[k].is_empty != 1:
-                    new_c.append(ints.iloc[k])
+        intersect = intersect[~intersect.is_empty]
+        intersections.append(intersect)
 
-    new_c = gpd.GeoSeries(new_c)
-    new_cc = gpd.GeoDataFrame({"geometry": new_c})
-    new_cc.columns = ["geometry"]
-    new_cc = new_cc[new_cc.geom_type == 'Polygon']
-    bounda = gpd.overlay(new_cc, tempPolygonDf, how="difference")
+    intersections_gdf = gpd.GeoDataFrame(
+        pd.concat([gpd.GeoDataFrame(series) for series in intersections])
+    )
+    intersections_gdf.columns = ["geometry"]
+    
+    if not len(intersections_gdf):
+        return gpd.GeoDataFrame({})
+
+    bounda = gpd.overlay(intersections_gdf, pol_df, how="difference")
+    bounda = bounda.explode()
+    bounda.reset_index(drop=True, inplace=True)
+
     if output_plot:
         fig, ax = plt.subplots(figsize=(10, 10))
         bounda.plot(ax=ax, color="red")
         plt.show()
-    # change multipolygon to polygon
-    bounda = bounda.explode()
-    bounda.reset_index(drop=True, inplace=True)
-    # bounda.to_file('boundary_ready_to_use.shp')
+
     return bounda
 
 
@@ -95,40 +80,37 @@ def dividePolygonsInTrainingAreas(polygons_df, areas_df):
     """
     Assign annotated ploygons in to the training areas.
     """
-    # For efficiency, assigned polygons are removed from the list, we
-    # make a copy here.
-
+    
     polygons_tmp = polygons_df.copy()
     polygons_by_area = {}
     
-    for idx, area_row in tqdm(areas_df.iterrows(), total=len(areas_df)):
+    for area_idx, area_row in tqdm(areas_df.iterrows(), total=len(areas_df)):
         
         spTemp = []
         allocated = []
         
         for pol_idx, pol_row in polygons_tmp.iterrows():
-            
-            if area_row.geometry.intersects(pol_row.geometry]):
-                
+            if area_row.geometry.intersects(pol_row.geometry):
                 spTemp.append(pol_row)
-                allocated.append(j)
+                allocated.append(pol_idx)
 
-            # Order of bounds: minx miny maxx maxy
+        # Order of bounds: minx miny maxx maxy
         boundary = calculateBoundaryWeight(
             spTemp,
             scale_polygon=1.5,
             output_plot=config.show_boundaries_during_processing,
         )
         
-        splitPolygons[area_idx] = {
+        polygons_by_area[area_idx] = {
             "polygons": spTemp,
             "boundaryWeight": boundary,
             "bounds": list(area_row.geometry.bounds),
         }
         
-        cpTrainingPolygon = cpTrainingPolygon.drop(allocated)
+        # Remove those trees that were already assigned to an area
+        polygons_tmp = polygons_tmp.drop(allocated)
         
-    return splitPolygons
+    return polygons_by_area
 
 
 def read_input_images(raw_image_base_dir, raw_image_file_type, raw_image_suffix):
@@ -208,11 +190,6 @@ def writeExtractedImageAndAnnotation(
     profile,
     polygonsInAreaDf,
     boundariesInAreaDf,
-    writePath,
-    bands_folder,
-    annotation_folder,
-    boundary_folder,
-    bands,
     area_id,
     normalize=True,
 ):
@@ -224,55 +201,41 @@ def writeExtractedImageAndAnnotation(
 
     """
     
-    with rio.open(conf.out_image_dir / f"{name}_id{area_id}.png", "w", **profile) as dst:
-        for band in range(len(bands)):
+    # Here we are going to create the images that we will use to train 
+    with rio.open(config.out_image_dir / f"{name}_id{area_id}.png", "w", **profile) as dst:
+        for band in range(len(config.bands)):
             norm_band = image_normalize(sm[0][band]).astype(profile["dtype"])
             dst.write(norm_band, band + 1)
 
-    if annotation_folder:
-        annotation_json_filepath = conf.annotation_folder / f"{name}_id{area_id}.json"
-        # The object is given a value of 1, the outline or the border of the
-        # object is given a value of 0 and rest of the image/background is
-        # given a value of 0
+    # The object is given a value of 1, the outline or the border of the
+    # object is given a value of 0 and rest of the image/background is
+    # given a value of 0
+    
+    
+    # The boundaries are given a value of 1, the outline or the border of the
+    # boundaries is also given a value of 1 and rest is given a value of 0
+
+    annotation_json_filepath = config.annotation_dir / f"{name}_id{area_id}.json"
+    boundary_json_filepath = config.boundary_dir / f"{name}_id{area_id}.json"
+    paths = [boundary_json_filepath, annotation_json_filepath]
+    
+    for i, df in enumerate([polygonsInAreaDf, boundariesInAreaDf]):
         rowColPolygons(
             polygonsInAreaDf,
             (sm[0].shape[1], sm[0].shape[2]),
             profile,
-            annotation_json_filepath,
+            paths[i],
             outline=0,
             fill=1,
         )
-    if boundary_folder:
-        boundary_json_filepath = conf.boundary_folder / f"{name}_id{area_id}.json"
-        # The boundaries are given a value of 1, the outline or the border of the
-        # boundaries is also given a value of 1 and rest is given a value of 0
-        rowColPolygons(
-            boundariesInAreaDf,
-            (sm[0].shape[1], sm[0].shape[2]),
-            profile,
-            boundary_json_filepath,
-            outline=1,
-            fill=1,
-        )
 
-
-def findOverlap(
-    input_images,
-    areas_with_polygons,
-    writePath,
-    bands_folder,
-    annotation_folder,
-    boundary_folder,
-    bands,
-):
+def findOverlap(input_images, areas_with_polygons,):
+    
     """
     Finds overlap of image with a training area.
     Use writeExtractedImageAndAnnotation() to write the overlapping training area
     and corresponding polygons in separate image files.
     """
-
-    if not writePath.exists():
-        writePath.mkdir(exist_ok=True, parents=True)
 
     overlaps = {image.name: [] for image in input_images}
 
@@ -310,11 +273,6 @@ def findOverlap(
                 profile,
                 polygonsInAreaDf,
                 boundariesInAreaDf,
-                writePath,
-                bands_folder,
-                annotation_folder,
-                boundary_folder,
-                bands,
                 area_id,
             )
 

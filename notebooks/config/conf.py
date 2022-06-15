@@ -15,8 +15,8 @@ class Configuration:
         
         self.image_dir = self.training_dir/"1_processed/image"
         
-        self.training_area = self.annotation_dir/"220614_first_batch/220614_areas.shp"
-        self.training_polygon = self.annotation_dir/"220614_first_batch/220614_polygons_4326.shp"
+        self.training_area = self.training_dir/"0_raw/1_input_data/220614_first_batch/220614_areas.shp"
+        self.training_polygon = self.training_dir/"0_raw/1_input_data/220614_first_batch/220614_polygons_4326.shp"
 
         self.model_dir = self.training_dir/"saved_models/UNet"
         
