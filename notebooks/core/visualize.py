@@ -3,12 +3,14 @@ from matplotlib.patches import Polygon
 
 
 def display_images(img, titles=None, cmap=None, norm=None, interpolation=None):
-    """Display the given set of images, optionally with titles.
-    images: array of image tensors in Batch * Height * Width * Channel format.
-    titles: optional. A list of titles to display with each image.
-    cmap: Optional. Color map to use. For example, "Blues".
-    norm: Optional. A Normalize instance to map values to colors.
-    interpolation: Optional. Image interpolation to use for display.
+    """
+    Display the given set of images, optionally with titles.
+    
+        images: array of image tensors in Batch * Height * Width * Channel format.
+        titles: optional. A list of titles to display with each image.
+        cmap: Optional. Color map to use. For example, "Blues".
+        norm: Optional. A Normalize instance to map values to colors.
+        interpolation: Optional. Image interpolation to use for display.
     """
     cols = img.shape[-1]
     rows = img.shape[0]
