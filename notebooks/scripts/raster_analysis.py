@@ -1,3 +1,5 @@
+from collections import defaultdict
+import cv2
 from importlib import reload
 from itertools import product
 from tqdm import tqdm
@@ -85,7 +87,7 @@ def detect_tree(model, img, width=256, height=256, stride=128, normalize=True):
 
         transform = rio.windows.transform(window, img.transform)
         # Add zero padding in case of corner images
-        patch = np.zeros((height, width, 4))  
+        patch = np.zeros((height, width, 8))  
         img_sm = img.read(window=window)
         img_sm = np.transpose(img_sm, axes=(1,2,0))
 
@@ -129,7 +131,7 @@ def transformToXY(polygons, transform):
     tp = []
     for polygon in polygons:
         rows, cols = zip(*polygon)
-        x, y = rasterio.transform.xy(transform, rows, cols)
+        x, y = rio.transform.xy(transform, rows, cols)
         tp.append(list(zip(x, y)))
     return tp
 
@@ -168,16 +170,7 @@ def createShapefileObject(polygons, meta, wfile):
                     " must have more than 2 points"
                 )
 
-# Generate a mask with polygons
-def transformContoursToXY(contours, transform=None):
-    tp = []
-    for cnt in contours:
-        pl = cnt[:, 0, :]
-        cols, rows = zip(*pl)
-        x, y = rasterio.transform.xy(transform, rows, cols)
-        tl = [list(i) for i in zip(x, y)]
-        tp.append(tl)
-    return tp
+
 
 
 def mask_to_polygons(maskF, transform):
@@ -208,9 +201,9 @@ def mask_to_polygons(maskF, transform):
     all_polygons = []
 
     for idx, cnt in enumerate(contours):
-        if (
-            idx not in child_contours
-        ):  # and cv2.contourArea(cnt) >= min_area: #Do we need to check for min_area??
+        if idx not in child_contours:  
+            
+            # and cv2.contourArea(cnt) >= min_area: #Do we need to check for min_area??
             try:
                 poly = Polygon(shell=cnt, holes=[c for c in cnt_children.get(idx, [])])
                 # if cv2.contourArea(c) >= min_area]) #Do we need to check for min_area??
@@ -225,7 +218,7 @@ def mask_to_polygons(maskF, transform):
 
 def create_contours_shapefile(mask, meta, out_fn):
     res = mask_to_polygons(mask, meta["transform"])
-    #     res = transformToXY(contours, meta['transform'])
+    # res = transformToXY(contours, meta['transform'])
     createShapefileObject(res, meta, out_fn)
 
 
@@ -240,15 +233,18 @@ def writeMaskToDisk(
     # Convert to correct required before writing
     if "float" in str(detected_meta["dtype"]) and "int" in write_as_type:
         print(
-            f'Converting prediction from {detected_meta["dtype"]} to {write_as_type}, using threshold of {th}'
+            f"Converting prediction from {detected_meta['dtype']} to {write_as_type},"
+            f"using threshold of {th}"
         )
         detected_mask[detected_mask < th] = 0
         detected_mask[detected_mask >= th] = 1
         detected_mask = detected_mask.astype(write_as_type)
         detected_meta["dtype"] = write_as_type
+        detected_meta["count"] = 1
 
-    with rasterio.open(wp, "w", **detected_meta) as outds:
+    with rio.open(wp, "w", **detected_meta) as outds:
         outds.write(detected_mask, 1)
+        
     if create_countors:
-        wp = wp.replace(image_type, output_shapefile_type)
+        wp = wp.with_suffix(".shp")
         create_contours_shapefile(detected_mask, detected_meta, wp)
