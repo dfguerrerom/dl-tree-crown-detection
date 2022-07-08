@@ -5,7 +5,7 @@ import numpy as np
 
 def image_normalize(array, axis=(0, 1)):
     """Normalize to zero mean and unit standard deviation along the given axis"""
-    return (array - array.mean(axis)) / (array.std(axis) + 1e-8)
+    return (array - np.nanmean(array, axis)) / (np.nanstd(array,axis) + 1e-8)
 
 # Each area (ndvi, pan, annotation, weight) is represented as an Frame
 class FrameInfo:
