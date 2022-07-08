@@ -5,7 +5,6 @@ import matplotlib.pyplot as plt  # plotting tools
 import PIL.ImageDraw
 import numpy as np
 import rasterio as rio  # I/O raster data (netcdf, height, geotiff, ...)
-import rasterio.mask
 import geopandas as gpd
 import pandas as pd
 from shapely.geometry import box
@@ -34,12 +33,12 @@ def calculateBoundaryWeight(polygonsInArea, scale_polygon=1.5, output_plot=True)
 
     pol_df = gpd.GeoDataFrame(pd.DataFrame(polygonsInArea))
     pol_df.reset_index(drop=True, inplace=True)
-    pol_df["scaled"] = pol_df[["geometry"]].scale(*[scale_polygon]*3, origin="center")
+    pol_df["scaled"] = pol_df[["geometry"]].scale(*[scale_polygon]*3, origin="center")  
 
     intersections = []
     
     # for each polygon in area scale, compare with other polygons:
-    for pol_idx, pol_row in tqdm(pol_df.iterrows(), total=len(pol_df)):
+    for pol_idx, pol_row in pol_df.iterrows(), total=len(pol_df):
 
         # Intersect all the dataframe with current pol_row.scaled geometry
         intersect = pol_df[
@@ -56,6 +55,9 @@ def calculateBoundaryWeight(polygonsInArea, scale_polygon=1.5, output_plot=True)
     
     if not len(intersections_gdf):
         return gpd.GeoDataFrame({})
+    
+    # Remove from the intersection the original tree shape
+    intersections_gdf = intersections_gdf[intersections_gdf.geom_type == 'Polygon']
 
     bounda = gpd.overlay(intersections_gdf, pol_df, how="difference")
     bounda = bounda.explode()
@@ -186,7 +188,7 @@ def rowColPolygons(area_df, areaShape, profile, filename, outline, fill):
 
 def writeExtractedImageAndAnnotation(
     name,
-    sm,
+    masked,
     profile,
     polygonsInAreaDf,
     boundariesInAreaDf,
@@ -204,7 +206,9 @@ def writeExtractedImageAndAnnotation(
     # Here we are going to create the images that we will use to train 
     with rio.open(config.out_image_dir / f"{name}_id{area_id}.png", "w", **profile) as dst:
         for band in range(len(config.bands)):
-            norm_band = image_normalize(sm[0][band]).astype(profile["dtype"])
+            norm_band = image_normalize(masked[band]).astype(profile["dtype"])
+            # Remove zeros (if are)
+            norm_band = np.nan_to_num(norm_band)
             dst.write(norm_band, band + 1)
 
     # The object is given a value of 1, the outline or the border of the
@@ -217,65 +221,100 @@ def writeExtractedImageAndAnnotation(
 
     annotation_json_filepath = config.annotation_dir / f"{name}_id{area_id}.json"
     boundary_json_filepath = config.boundary_dir / f"{name}_id{area_id}.json"
-    paths = [boundary_json_filepath, annotation_json_filepath]
+    
+    paths = [annotation_json_filepath, boundary_json_filepath,]
     
     for i, df in enumerate([polygonsInAreaDf, boundariesInAreaDf]):
         rowColPolygons(
-            polygonsInAreaDf,
-            (sm[0].shape[1], sm[0].shape[2]),
+            df,
+            (masked.shape[1], masked.shape[2]),
             profile,
             paths[i],
-            outline=0,
+            outline=i,
             fill=1,
         )
+        
+def create_dataset(data, crs, transform, name):
+    """Receives an image (ch, height, width)"""
+    
+    memfile = rio.io.MemoryFile()
+    memfile.name = name
+    dataset = memfile.open(
+        driver='GTiff', 
+        height=data.shape[1], 
+        width=data.shape[2], 
+        count=data.shape[0], 
+        crs=crs, 
+        transform=transform, 
+        dtype=data.dtype
+    )
+
+    for band in range(data.shape[0]):
+        dataset.write(data[band], band+1)
+        
+    return dataset
+
 
 def findOverlap(input_images, areas_with_polygons,):
-    
     """
     Finds overlap of image with a training area.
     Use writeExtractedImageAndAnnotation() to write the overlapping training area
     and corresponding polygons in separate image files.
     """
 
-    overlaps = {image.name: [] for image in input_images}
-
+    overlaps = {area_id: [] for area_id in areas_with_polygons}
+    
+    # Some areas migth contain different images. Let's group them and create
+    # the composite before extract their annotations.
+    images_by_area = {}
+    
     for img_path, area_id in itertools.product(input_images, areas_with_polygons):
 
-        name = img_path.stem
         img = rio.open(img_path)
-
         areaInfo = areas_with_polygons[area_id]
-
-        # Convert the polygons in the area in a dataframe and get the bounds of
-        # the area.
-        polygonsInAreaDf = gpd.GeoDataFrame(areaInfo["polygons"])
-        boundariesInAreaDf = gpd.GeoDataFrame(areaInfo["boundaryWeight"])
-        bboxArea = box(*areaInfo["bounds"])
-        bboxImg = box(*img.bounds)
-        # Extract the window if area is in the image
-
-        if bboxArea.intersects(bboxImg):
-            profile = img.profile
-            sm = rio.mask.mask(img, [bboxArea], all_touched=True, crop=True)
-            profile["height"] = sm[0].shape[1]
-            profile["width"] = sm[0].shape[2]
-            profile["transform"] = sm[1]
-            # That's a problem with rio, if the height and the width are less
-            # then 256 it throws: ValueError: blockysize exceeds raster height
-            # So I set the blockxsize and blockysize to prevent this problem
-            profile["dtype"] = rio.float32
-            # writeExtractedImageAndAnnotation writes the image, annotation and
-            # boundaries and returns the counter of the next file to write.
-
-            writeExtractedImageAndAnnotation(
-                name,
-                sm,
-                profile,
-                polygonsInAreaDf,
-                boundariesInAreaDf,
-                area_id,
-            )
-
-            overlaps[img_path.name].append(area_id)
-
+        area_box = box(*areaInfo["bounds"])
+        image_box = box(*img.bounds)
+        
+        if area_box.intersects(image_box): overlaps[area_id].append(img_path)
+            
     return overlaps
+
+def create_annotations(overlap_dict, areas_with_polygons):
+    
+    for area_id, images in tqdm(overlap_dict.items()):
+
+        area_info = areas_with_polygons[area_id]
+        trees_by_area_df = gpd.GeoDataFrame(area_info["polygons"])
+        boundaries_by_area_df = gpd.GeoDataFrame(area_info["boundaryWeight"])
+        area_box = box(*area_info["bounds"])
+
+        if len(images) == 1:
+            image = rio.open(images[0])
+
+        else:
+            rio_imgs = [rio.open(img) for img in images]
+            merged, transform = rio.merge.merge(rio_imgs)
+            crs = rio.open(images[0]).profile["crs"]
+            name = "_".join([Path(img.name).stem for img in rio_imgs])
+            image = create_dataset(merged, crs, transform, name)
+
+        masked, mask_transform = rio.mask.mask(
+            image, [area_box], all_touched=True, crop=True
+        )
+
+        profile = image.profile
+        profile["height"] = masked.shape[1]
+        profile["width"] = masked.shape[2]
+        profile["transform"] = mask_transform
+        profile["dtype"] = rio.float32
+
+        name = Path(image.name).stem
+        writeExtractedImageAndAnnotation(
+            name,
+            masked,
+            profile,
+            trees_by_area_df,
+            boundaries_by_area_df,
+            area_id,
+        )
+
